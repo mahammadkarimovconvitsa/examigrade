@@ -3,7 +3,7 @@ import re
 from typing import List, Dict, Tuple, Optional
 from decimal import Decimal , ROUND_HALF_UP
 from venv import logger
-from examadmin.models import Exam,Class,NotUploadedStudentResult, StudentResult, SubjectResult, CorrectAnswerCombination, CorrectAnswer, Branch, Section, Subject, Group
+from examadmin.models import Exam,Class,NotUploadedStudentResult, StudentResult, SubjectResult, CorrectAnswerCombination, CorrectAnswer, Branch, Section, Subject, Group, Specialization
 from examadmin.models import ImportLog
 import random
 import json
@@ -23,7 +23,7 @@ class TxtImportService:
         'Magistratura': 'parse_magistr_service',
         'Bilik yarışı': 'parse_magistr_with_class',
         'Təkmilləşdirmə': 'parse_magistr_with_class',
-        'Müəllimlərin İşə Qəbulu': 'parse_magistr_service',
+        'Müəllimlərin İşə Qəbulu': 'parse_miq',
         'Sertifikasiya': 'parse_magistr_service',
         'Azərbaycan dili (dövlət dili kimi)': 'parse_11th_grade_without_foreign_language',
     }
@@ -58,6 +58,8 @@ class TxtImportService:
                 key = f"{combination.group_name}_" + key
             if combination.category:
                 key = f"{combination.category}_" + key
+            if combination.specialization:
+                key = f"{combination.specialization.code}_" + key
                 
             answers[key] = {}
             # Use direct query instead of related manager
@@ -546,6 +548,53 @@ class TxtImportService:
         except Exception as e:
             raise ValueError(f"Magistr məlumatları analiz edilərkən xəta: {str(e)}")
 
+    def parse_miq(self, line: str) -> Dict:
+        """
+        Parse Müəllimlərin İşə Qəbulu (MİQ) exam data.
+        Format:
+            0: Ad
+            1: Soyad
+            2: Telefon
+            3: Cins (K/Q)
+            4: İş nömrəsi
+            5: Bölmə (A/R)
+            6: Variant (A/B/C/D)
+            7: İxtisas kodu (01, 02, 03...)
+            8: Peşə (M/TM)
+            9: Məktəb kodu
+            10+: Cavablar
+        """
+        try:
+            parts = line.split(';')
+            if len(parts) < 10:
+                raise ValueError("MİQ məlumatları natamam")
+
+            try:
+                parts[0] = parts[0].replace('u', 'Ü').replace('o', 'Ö').replace('g', 'Ğ').replace('i', 'İ').replace('e', 'Ə').replace('s', 'Ş').replace('c', 'Ç')
+                parts[1] = parts[1].replace('u', 'Ü').replace('o', 'Ö').replace('g', 'Ğ').replace('i', 'İ').replace('e', 'Ə').replace('s', 'Ş').replace('c', 'Ç')
+            except Exception:
+                pass
+
+            specialization_code = parts[7].strip() if len(parts) > 7 else ''
+            peshe = parts[8].strip() if len(parts) > 8 else ''
+
+            data = {
+                'student_name': f"{parts[0].strip()} {parts[1].strip()}",
+                'contact_number': parts[2].strip() if len(parts) > 2 else '',
+                'gender': parts[3].strip() if len(parts) > 3 else 'K',
+                'work_number': parts[4].strip() if len(parts) > 4 else '',
+                'section': parts[5].strip() if len(parts) > 5 else '',
+                'variant': parts[6].strip() if len(parts) > 6 else '',
+                'specialization_code': specialization_code,
+                'school_number': parts[9].strip() if len(parts) > 9 else '',
+                'answers': parts[10:] if len(parts) > 10 else [],
+                'additional_datas': {'peshe': peshe},
+            }
+
+            return data
+        except Exception as e:
+            raise ValueError(f"MİQ məlumatları analiz edilərkən xəta: {str(e)}")
+
     def parse_magistr_with_class(self, line: str) -> Dict:
         """
         Parse magistr exam data with class level (for Bilik yarışı, Təkmilləşdirmə)
@@ -708,6 +757,14 @@ class TxtImportService:
                 except Exception:
                     pass
                 return None
+
+            def get_specialization_object(spec_code):
+                try:
+                    if spec_code:
+                        return Specialization.objects.filter(code=spec_code).first()
+                except Exception:
+                    pass
+                return None
             
             # Case 1: Existing student with results, no recheck
             if existing_student and existing_subject_results and existing_subject_results.exists() and not self.recheck:
@@ -735,6 +792,7 @@ class TxtImportService:
                         class_level=get_class_object(student_data.get('class_level')),
                         section=section,
                         group=get_group_object(student_data.get('group')),
+                        specialization=get_specialization_object(student_data.get('specialization_code')),
                         is_active=True,
                         original_answers=json.dumps(student_data.get('answers', []), ensure_ascii=False)
                     )
@@ -763,6 +821,7 @@ class TxtImportService:
                         class_level=get_class_object(student_data.get('class_level')),
                         section=section,
                         group=get_group_object(student_data.get('group')),
+                        specialization=get_specialization_object(student_data.get('specialization_code')),
                         is_active=True,
                         original_answers=json.dumps(student_data.get('answers', []), ensure_ascii=False)
                     )
@@ -785,6 +844,7 @@ class TxtImportService:
                     student_result.variant = student_data.get('variant', student_result.variant)
                     student_result.class_level = get_class_object(student_data.get('class_level'))
                     student_result.group = get_group_object(student_data.get('group'))
+                    student_result.specialization = get_specialization_object(student_data.get('specialization_code'))
                     student_result.is_active = True
                     student_result.original_answers = json.dumps(student_data.get('answers', []), ensure_ascii=False)
                 except Exception as update_error:
@@ -807,6 +867,7 @@ class TxtImportService:
                     student_result.variant = student_data.get('variant', student_result.variant)
                     student_result.class_level = get_class_object(student_data.get('class_level'))
                     student_result.group = get_group_object(student_data.get('group'))
+                    student_result.specialization = get_specialization_object(student_data.get('specialization_code'))
                     student_result.is_active = True
                     student_result.original_answers = json.dumps(student_data.get('answers', []), ensure_ascii=False)
                 except Exception as recheck_error:
@@ -827,6 +888,7 @@ class TxtImportService:
                         class_level=get_class_object(student_data.get('class_level')),
                         section=section,
                         group=get_group_object(student_data.get('group')),
+                        specialization=get_specialization_object(student_data.get('specialization_code')),
                         is_active=True,
                         original_answers=json.dumps(student_data.get('answers', []), ensure_ascii=False)
                     )
@@ -983,8 +1045,17 @@ class TxtImportService:
                 total_score = round(total_score, 1)
             
             student_result.total_score = total_score  # Can be None
+            merged_additional = {}
+            if student_data.get('additional_datas'):
+                merged_additional.update(student_data['additional_datas'])
             if additional_data:
-                student_result.additional_datas = additional_data
+                if isinstance(additional_data, list):
+                    for item in additional_data:
+                        merged_additional.update(item)
+                elif isinstance(additional_data, dict):
+                    merged_additional.update(additional_data)
+            if merged_additional:
+                student_result.additional_datas = merged_additional
                 
             student_result.save()
         except Exception as save_error:
@@ -1429,6 +1500,8 @@ class TxtImportService:
                     key = f"{student_data['group']}_" + key 
                 if student_data.get('category'):
                     key = f"{student_data['category']}_" + key
+                if student_data.get('specialization_code'):
+                    key = f"{student_data['specialization_code']}_" + key
                     
                 return key
             except Exception as key_build_error:

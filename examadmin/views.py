@@ -199,6 +199,7 @@ class ExamViewSet(viewsets.ModelViewSet):
             new_exam.classes.set(original_exam.classes.all())
             new_exam.sections.set(original_exam.sections.all())
             new_exam.groups.set(original_exam.groups.all())
+            new_exam.specializations.set(original_exam.specializations.all())
             
             # Copy section details
             for section_detail in original_exam.section_details.all():
@@ -228,7 +229,8 @@ class ExamViewSet(viewsets.ModelViewSet):
                     variant=combination.variant,
                     class_level=combination.class_level,
                     category=combination.category,
-                    group_name=combination.group_name
+                    group_name=combination.group_name,
+                    specialization=combination.specialization
                 )
                 
                 # Copy correct answers for this combination
@@ -716,6 +718,17 @@ class GroupViewSet(viewsets.ModelViewSet):
         group.save()
         return Response(self.get_serializer(group).data)
 
+class SpecializationViewSet(viewsets.ModelViewSet):
+    queryset = Specialization.objects.all()
+    serializer_class = SpecializationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    @action(detail=True, methods=['patch'])
+    def toggle_status(self, request, pk=None):
+        specialization = self.get_object()
+        specialization.is_active = not specialization.is_active
+        specialization.save()
+        return Response(self.get_serializer(specialization).data)
 
 
 class GetStatsViewSet(viewsets.ViewSet):

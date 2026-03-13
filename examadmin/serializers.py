@@ -49,6 +49,11 @@ class GroupSerializer(serializers.ModelSerializer):
         model = Group
         fields = ['id', 'name', 'is_active', 'created_at', 'updated_at']
 
+class SpecializationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Specialization
+        fields = ['id', 'name', 'code', 'is_active', 'created_at', 'updated_at']
+
 class SectionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Section
@@ -66,9 +71,12 @@ class SectionDetailSerializer(serializers.ModelSerializer):
     subjects = ExamSubjectSerializer(source='exam_subjects', many=True)
     subject_count = serializers.ReadOnlyField()
     group_name = serializers.CharField(allow_null=True, required=False)
+    specialization_code = serializers.CharField(source='specialization.code', read_only=True, default=None)
+    specialization_name = serializers.CharField(source='specialization.name', read_only=True, default=None)
     class Meta:
         model = SectionDetail
-        fields = ['section', 'section_name', 'variant_count', 'subject_count', 'subjects','group','group_name']
+        fields = ['section', 'section_name', 'variant_count', 'subject_count', 'subjects','group','group_name',
+                  'specialization', 'specialization_code', 'specialization_name']
 
 class ExamCreateSerializer(serializers.ModelSerializer):
     branch_ids = serializers.ListField(child=serializers.IntegerField(), write_only=True,required=False)
@@ -76,10 +84,11 @@ class ExamCreateSerializer(serializers.ModelSerializer):
     class_ids = serializers.ListField(child=serializers.IntegerField(), required=False, write_only=True)
     section_ids = serializers.ListField(child=serializers.IntegerField(), write_only=True)
     section_details = SectionDetailSerializer(many=True, write_only=True)
+    specialization_ids = serializers.ListField(child=serializers.IntegerField(), required=False, write_only=True)
     
     class Meta:
         model = Exam
-        fields = ['name', 'date', 'type', 'branch_ids', 'class_ids', 'section_ids', 'groups', 'section_details']
+        fields = ['name', 'date', 'type', 'branch_ids', 'class_ids', 'section_ids', 'groups', 'section_details', 'specialization_ids']
     
     def create(self, validated_data):
         
@@ -87,6 +96,7 @@ class ExamCreateSerializer(serializers.ModelSerializer):
         section_ids = validated_data.pop('section_ids')
         groups = validated_data.pop('groups', [])
         section_details_data = validated_data.pop('section_details')
+        specialization_ids = validated_data.pop('specialization_ids', [])
         branch_ids = Branch.objects.all().values_list('id', flat=True)
         
         exam = Exam.objects.create(**validated_data)
@@ -101,22 +111,30 @@ class ExamCreateSerializer(serializers.ModelSerializer):
             gro = Group.objects.get(name=g)
             group_ids.append(gro.id)
         exam.groups.set(group_ids)
+        if specialization_ids:
+            exam.specializations.set(specialization_ids)
         
         # Create section details
         for section_detail_data in section_details_data:
-            # Ensure group is set if provid
-            if 'group_name' in section_detail_data:
-                group_name = section_detail_data['group_name']
+            group_name = section_detail_data.get('group_name')
+            specialization = section_detail_data.get('specialization')
+
+            if group_name:
                 group = Group.objects.get(name=group_name)
-                section_detail_data['group'] = group
-                
                 section_detail = SectionDetail.objects.create(
-                exam=exam,
-                section=section_detail_data['section'],
-                variant_count=section_detail_data['variant_count'],
-                group=section_detail_data.get('group'),
-                group_name=group_name
-            )
+                    exam=exam,
+                    section=section_detail_data['section'],
+                    variant_count=section_detail_data['variant_count'],
+                    group=group,
+                    group_name=group_name
+                )
+            elif specialization:
+                section_detail = SectionDetail.objects.create(
+                    exam=exam,
+                    section=section_detail_data['section'],
+                    variant_count=section_detail_data['variant_count'],
+                    specialization=specialization
+                )
             else:
                 section_detail = SectionDetail.objects.create(
                     exam=exam,
@@ -125,7 +143,6 @@ class ExamCreateSerializer(serializers.ModelSerializer):
                 )
 
             subjects_data = section_detail_data.pop('exam_subjects')
-            # Create exam subjects
             for subject_data in subjects_data:
                 ExamSubject.objects.create(
                     section_detail=section_detail,
@@ -142,10 +159,11 @@ class ExamUpdateSerializer(serializers.ModelSerializer):
         section_ids = serializers.ListField(child=serializers.IntegerField(), required=False, write_only=True)
         groups = serializers.ListField(child=serializers.CharField(), required=False, write_only=True, allow_null=True)
         section_details = SectionDetailSerializer(many=True, required=False)
+        specialization_ids = serializers.ListField(child=serializers.IntegerField(), required=False, write_only=True)
 
         class Meta:
             model = Exam
-            fields = ['name', 'date', 'type', 'branch_ids', 'class_ids', 'section_ids', 'groups', 'section_details']
+            fields = ['name', 'date', 'type', 'branch_ids', 'class_ids', 'section_ids', 'groups', 'section_details', 'specialization_ids']
 
         def update(self, instance, validated_data):
             # Update branches
@@ -170,28 +188,32 @@ class ExamUpdateSerializer(serializers.ModelSerializer):
                 groups = validated_data.pop('groups')
                 instance.groups.set(groups)
 
+            # Update specializations
+            if 'specialization_ids' in validated_data:
+                specialization_ids = validated_data.pop('specialization_ids')
+                instance.specializations.set(specialization_ids)
+
             # Update section details
             if 'section_details' in validated_data:
                 section_details_data = validated_data.pop('section_details')
-                instance.section_details.all().delete()  # Clear existing section details
+                instance.section_details.all().delete()
                 for section_detail_data in section_details_data:
-                    # Ensure group is set if provided
                     group_name = section_detail_data.get('group_name')
+                    specialization = section_detail_data.get('specialization')
+
                     if group_name:
                         group = Group.objects.get(name=group_name)
-                        section_detail_data['group'] = group
-                        section_detail_data['group_name'] = group_name
                     else:
-                        section_detail_data['group'] = None
-                        section_detail_data['group_name'] = None
+                        group = None
 
                     subjects_data = section_detail_data.pop('exam_subjects', [])
                     section_detail = SectionDetail.objects.create(
                         exam=instance,
                         section=section_detail_data['section'],
                         variant_count=section_detail_data['variant_count'],
-                        group=section_detail_data.get('group'),
-                        group_name=section_detail_data.get('group_name')
+                        group=group,
+                        group_name=group_name,
+                        specialization=specialization
                     )
                     for subject_data in subjects_data:
                         ExamSubject.objects.create(
@@ -226,11 +248,13 @@ class ExamDetailSerializer(serializers.ModelSerializer):
     classes = ClassSerializer(many=True, required=False)
     sections = SectionSerializer(many=True, required=False)
     section_details = SectionDetailSerializer(many=True, required=False)
+    specializations = SpecializationSerializer(many=True, required=False)
     branch_count = serializers.ReadOnlyField()
     branch_ids = serializers.SerializerMethodField()
     class_ids = serializers.SerializerMethodField()
     section_ids = serializers.SerializerMethodField()
     group_ids = serializers.SerializerMethodField()
+    specialization_ids = serializers.SerializerMethodField()
     
     def update(self, instance, validated_data):
         # Update branches
@@ -276,8 +300,8 @@ class ExamDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Exam
         fields = ['id', 'name', 'date', 'type', 'participant_count', 'branch_count', 'is_active', 
-                 'branches', 'classes', 'sections', 'section_details', 'groups',
-                 'branch_ids', 'class_ids', 'section_ids', 'created_at', 'updated_at','group_ids']
+                 'branches', 'classes', 'sections', 'section_details', 'groups', 'specializations',
+                 'branch_ids', 'class_ids', 'section_ids', 'created_at', 'updated_at','group_ids', 'specialization_ids']
     
     def get_branch_ids(self, obj):
         return list(obj.branches.values_list('id', flat=True))
@@ -289,15 +313,19 @@ class ExamDetailSerializer(serializers.ModelSerializer):
         return list(obj.sections.values_list('id', flat=True))
     def get_group_ids(self, obj):
         return obj.groups.values()
+    def get_specialization_ids(self, obj):
+        return list(obj.specializations.values_list('id', flat=True))
 
 class StudentResultSerializer(serializers.ModelSerializer):
     branch_name = serializers.CharField(source='branch.name', read_only=True)
     section_name = serializers.CharField(source='section.name', read_only=True)
+    specialization_name = serializers.CharField(source='specialization.name', read_only=True, default=None)
     
     class Meta:
         model = StudentResult
         fields = ['id', 'student_name', 'work_number', 'gender', 'contact_number', 'school_number',
                  'branch', 'branch_name', 'variant', 'section', 'section_name', 'class_level','group',
+                 'specialization', 'specialization_name',
                  'total_score', 'answer_card_pdf','is_active']
 
 class SubjectResultSerializer(serializers.ModelSerializer):
@@ -325,6 +353,8 @@ class DetailedStudentResultSerializer(serializers.ModelSerializer):
     section = serializers.PrimaryKeyRelatedField(queryset=Section.objects.all(), required=False)
     group = GroupSerializer(read_only=True)
     group_id = serializers.IntegerField(required=False, write_only=True)
+    specialization = SpecializationSerializer(read_only=True)
+    specialization_id = serializers.IntegerField(required=False, write_only=True)
     subject_results = SubjectResultSerializer(many=True, read_only=False)
     overall_stats = serializers.SerializerMethodField()
     section_name = serializers.SerializerMethodField()
@@ -336,19 +366,17 @@ class DetailedStudentResultSerializer(serializers.ModelSerializer):
         return obj.section.name if obj.section else None
 
     def to_representation(self, instance):
-        """Add group_id to the serialized output"""
         data = super().to_representation(instance)
-        if instance.group:
-            data['group_id'] = instance.group.id
-        else:
-            data['group_id'] = None
+        data['group_id'] = instance.group.id if instance.group else None
+        data['specialization_id'] = instance.specialization.id if instance.specialization else None
         return data
 
     class Meta:
         model = StudentResult
         fields = ['id', 'student_name', 'work_number', 'gender', 'contact_number', 'school_number',
                  'variant', 'total_score', 'exam', 'branch', 'section', 'section_name',
-                 'subject_results', 'overall_stats','additional_datas','pdfToken','class_level','group','original_answers', 'group_id']
+                 'subject_results', 'overall_stats','additional_datas','pdfToken','class_level','group','original_answers', 'group_id',
+                 'specialization', 'specialization_id']
 
     def update(self, instance, validated_data):
         """
@@ -370,10 +398,22 @@ class DetailedStudentResultSerializer(serializers.ModelSerializer):
                         group = Group.objects.get(id=value)
                         instance.group = group
                     except Group.DoesNotExist:
-                        pass  # Skip if group doesn't exist
+                        pass
                 else:
-                    instance.group = None  # Set to None if group_id is None
-                continue  # Don't call setattr for group_id
+                    instance.group = None
+                continue
+            if attr == 'specialization':
+                continue
+            if attr == 'specialization_id':
+                if value is not None:
+                    try:
+                        spec = Specialization.objects.get(id=value)
+                        instance.specialization = spec
+                    except Specialization.DoesNotExist:
+                        pass
+                else:
+                    instance.specialization = None
+                continue
                 
             setattr(instance, attr, value)
         
@@ -441,11 +481,12 @@ class CorrectAnswerCombinationSerializer(serializers.ModelSerializer):
     answers = CorrectAnswerSerializer(many=True)
     section_name = serializers.CharField(source='section.name', read_only=True)
     class_name = serializers.CharField(source='class_level.name', read_only=True)
+    specialization_name = serializers.CharField(source='specialization.name', read_only=True, default=None)
     
     class Meta:
         model = CorrectAnswerCombination
         fields = ['id', 'combination_uid','section', 'section_name', 'variant', 'class_level', 'class_name', 
-                 'group_name', 'answers']
+                 'group_name', 'specialization', 'specialization_name', 'answers']
 
 class CorrectAnswerCombinationCreateSerializer(serializers.Serializer):
     combinations = CorrectAnswerCombinationSerializer(many=True)

@@ -73,6 +73,18 @@ class Group(models.Model):
     class Meta:
         ordering = ['id']
 
+class Specialization(models.Model):
+    name = models.CharField(max_length=255)
+    code = models.CharField(max_length=10, unique=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['id']
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"
 
 
 class Exam(models.Model):
@@ -97,6 +109,7 @@ class Exam(models.Model):
     classes = models.ManyToManyField(Class, related_name='exams', blank=True)
     sections = models.ManyToManyField(Section, related_name='exams')
     groups = models.ManyToManyField(Group, related_name='exams')
+    specializations = models.ManyToManyField(Specialization, related_name='exams', blank=True)
     participant_count = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -124,10 +137,11 @@ class SectionDetail(models.Model):
     variant_count = models.PositiveIntegerField(default=1)
     group = models.ForeignKey(Group, on_delete=models.CASCADE, null=True, blank=True)
     group_name = models.CharField(max_length=255,null=True,blank=True)
+    specialization = models.ForeignKey(Specialization, on_delete=models.CASCADE, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
-        unique_together = ['exam', 'section', 'group']
+        unique_together = ['exam', 'section', 'group', 'specialization']
     
     def __str__(self):
         return f"{self.exam.name} - {self.section.name} - {self.group.name}"
@@ -165,6 +179,7 @@ class StudentResult(models.Model):
     variant = models.CharField(max_length=10,null=True, blank=True)
     section = models.ForeignKey(Section, on_delete=models.CASCADE,null=True, blank=True)
     group = models.ForeignKey(Group, on_delete=models.CASCADE, null=True, blank=True)
+    specialization = models.ForeignKey('Specialization', on_delete=models.CASCADE, null=True, blank=True)
     total_score = models.DecimalField(max_digits=6, decimal_places=2,null=True, blank=True)
     class_level = models.ForeignKey(Class, on_delete=models.CASCADE, null=True, blank=True)
     is_active = models.BooleanField(default=False)
@@ -225,11 +240,12 @@ class CorrectAnswerCombination(models.Model):
     class_level = models.ForeignKey(Class, on_delete=models.CASCADE, null=True, blank=True)
     category = models.CharField(max_length=50, null=True, blank=True,choices=CATEGORY_CHOICES)  # e.g., 'Mathematics', 'Science'
     group_name = models.CharField(max_length=100, null=True, blank=True)
+    specialization = models.ForeignKey(Specialization, on_delete=models.CASCADE, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        unique_together = ['exam', 'section', 'variant', 'class_level', 'group_name']
+        unique_together = ['exam', 'section', 'variant', 'class_level', 'group_name', 'specialization']
     
     def __str__(self):
         return f"{self.exam.name} - {self.section.name} - {self.variant}"
