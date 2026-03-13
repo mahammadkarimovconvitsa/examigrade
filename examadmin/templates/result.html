@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nəticə Kartı - {{ result.work_number }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #fff;
+            color: #000;
+        }
+        
+        .container {
+            padding: 20px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        
+        .header-section {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+        }
+        
+        .logo-container {
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .logo-container img {
+            max-width: 200px;
+            height: auto;
+        }
+        
+        .exam-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .student-info {
+            margin: 5px 0;
+        }
+        
+        .student-info p {
+            margin: 5px 0;
+        }
+        
+        .subject-container {
+            margin-bottom: 10px;
+            border: 1px solid #000;
+        }
+        
+        .subject-header {
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-bottom: 1px solid #000;
+        }
+        
+        .subject-header h3 {
+            margin: 0;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        .questions-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        
+        .questions-table td {
+            border: 1px solid #000;
+            padding: 3px;
+            text-align: center;
+        }
+        
+        .questions-table .row-header {
+            padding: 5px;
+            font-weight: bold;
+            width: 80px;
+        }
+        
+        .question-numbers {
+            background-color: #f0f0f0;
+            font-weight: bold;
+        }
+        
+        .correct-answers {
+            background-color: #e8f5e8;
+            font-weight: bold;
+        }
+        
+        .student-answers {
+            background-color: #fff8dc;
+        }
+        
+        .results-row {
+            background-color: #e6f3ff;
+            font-weight: bold;
+        }
+        
+        .correct-result {
+            color: green;
+        }
+        
+        .incorrect-result {
+            color: red;
+        }
+        
+        .subject-statistics {
+            padding: 10px;
+            border-top: 1px solid #000;
+            background-color: #f9f9f9;
+        }
+        
+        .statistics-flex {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        
+        .statistics-table {
+            margin-top: 5px;
+            font-size: 15px;
+            font-weight: bold;
+        }
+        
+        .statistics-table td {
+            padding-right: 15px;
+            padding-left: 15px;
+        }
+        
+        .subject-score {
+            color: red;
+            font-weight: bold;
+        }
+        
+        .additional-data {
+            margin-top: 15px;
+            text-align: left;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        .total-score {
+            margin-top: 15px;
+            text-align: left;
+            font-size: 20px;
+            color: red;
+            font-weight: bold;
+        }
+        
+        .answer-card-link {
+            margin-top: 15px;
+            text-align: left;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        .answer-card-link a {
+            text-decoration: underline;
+            color: blue;
+        }
+        
+        @media print {
+            .no-print {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header Section -->
+        <div class="header-section">
+            <!-- Branch Logo -->
+             {% if result.branch.logo %}
+            <div class="logo-container">
+                <img src="https://api.neticelerim.az{{ result.branch.logo }}" 
+                     alt="{{ result.branch.name }}">
+            </div>
+            {% endif %}
+            <!-- Exam Title -->
+            <h2 class="exam-title">{{ result.exam.name }}</h2>
+            
+            <!-- Student Info -->
+            <div class="student-info">
+                <p><strong>{{ result.work_number }}</strong> {{ result.student_name }}</p>
+                <p>
+                    <b>İmtahan mərkəzi:</b> {{ result.branch.name }} &nbsp;
+                    <b>Tarix:</b> {{ result.exam.date }} &nbsp;
+                    <b>Bölmə:</b> {{ result.section_name }} &nbsp;
+                    <b>Variant:</b> {{ result.variant }} &nbsp;
+                    {% if result.class_level %}
+                        <b>Sinif:</b> {{ result.class_level }} &nbsp;
+                    {% endif %}
+                    {% if result.group %}
+                        <b>Qrup:</b> {{ result.group.name }} &nbsp;
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+
+        <!-- Subject Results -->
+        {% for subject in result.subject_results %}
+        <div class="subject-container">
+            <!-- Subject Header -->
+            <div class="subject-header">
+                <h3>{{ subject.subject_name }} üzrə bilikləri yoxlayan tapşırıqlar:</h3>
+            </div>
+            
+            <!-- Questions Table -->
+            <table class="questions-table">
+                <tbody>
+                    <!-- Question Numbers Row -->
+                    <tr>
+                        <td class="row-header question-numbers">Sual №</td>
+                        {% for answer in subject.subject_data %}
+                        <td class="question-numbers">{{ answer.question_number }}</td>
+                        {% endfor %}
+                    </tr>
+                    
+                    <!-- Correct Answers Row -->
+                    <tr>
+                        <td class="row-header correct-answers">Düzgün Cavab</td>
+                        {% for answer in subject.subject_data %}
+                        <td class="correct-answers">{{ answer.correct_answer }}</td>
+                        {% endfor %}
+                    </tr>
+                    
+                    <!-- Student Answers Row -->
+                    <tr>
+                        <td class="row-header student-answers" style="font-weight: bold;">Sizin Cavab</td>
+                        {% for answer in subject.subject_data %}
+                        <td class="student-answers">{{ answer.student_answer|default:"-" }}</td>
+                        {% endfor %}
+                    </tr>
+                    
+                    <!-- Results Row -->
+                    <tr>
+                        <td class="row-header results-row">Nəticə</td>
+                        {% for result_item in subject.subject_data %}
+                        <td class="results-row">
+                            {% if result_item.result == "+" %}
+                                <span class="correct-result">+</span>
+                            {% elif result_item.result == "-" %}
+                                <span class="incorrect-result">-</span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Subject Statistics -->
+            <div class="subject-statistics">
+                <div class="statistics-flex">
+                    <div>
+                        <table class="statistics-table">
+                            <tbody>
+                                <tr>
+                                    <td>Düzgün cavabların sayı: {{ subject.correct_answers }}</td>
+                                    <td>Səhv cavabların sayı: {{ subject.wrong_answers }}</td>
+                                    <td>İmtina: {{ subject.empty_answers }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div>
+                        <strong class="subject-score">Fənn balı: {{ subject.score }}</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        <!-- Additional Data -->
+        {% if result.additional_datas %}
+        <div>
+            {% for data in result.additional_datas %}
+                {% for key, value in data.items %}
+                <div class="additional-data">
+                    {{ key }}: {{ value.0 }}
+                </div>
+                {% endfor %}
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Total Score -->
+        <div class="total-score">
+            Ümumi bal: {{ result.total_score }}
+        </div>
+
+       
+    </div>
+</body>
+</html>
