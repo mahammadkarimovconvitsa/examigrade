@@ -814,6 +814,8 @@ class ExportViewSet(viewsets.ViewSet):
                 'İmtahan tarixi': detailed_result['exam']['date'],
                 'Bölmə': detailed_result['section_name'] if detailed_result['section_name'] else '',
                 'Sinif': result.class_level.name if result.class_level else '',
+                'İxtisas': detailed_result['specialization_name'] if detailed_result['specialization_name'] else '',
+                'Peşə': detailed_result['additional_datas']['peshe'] if detailed_result['additional_datas']['peshe'] else '',
                 'Variant': detailed_result['variant'],
                 'Məktəb Nömrəsi': "",
                 'Ümumi Bal': str(detailed_result['total_score']).replace('.',','),

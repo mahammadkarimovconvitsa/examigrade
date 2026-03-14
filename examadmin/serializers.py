@@ -320,13 +320,14 @@ class StudentResultSerializer(serializers.ModelSerializer):
     branch_name = serializers.CharField(source='branch.name', read_only=True)
     section_name = serializers.CharField(source='section.name', read_only=True)
     specialization_name = serializers.CharField(source='specialization.name', read_only=True, default=None)
+    specialization_code = serializers.CharField(source='specialization.code', read_only=True, default=None)
     
     class Meta:
         model = StudentResult
         fields = ['id', 'student_name', 'work_number', 'gender', 'contact_number', 'school_number',
                  'branch', 'branch_name', 'variant', 'section', 'section_name', 'class_level','group',
-                 'specialization', 'specialization_name',
-                 'total_score', 'answer_card_pdf','is_active']
+                 'specialization', 'specialization_name', 'specialization_code',
+                 'total_score', 'answer_card_pdf','is_active', 'additional_datas']
 
 class SubjectResultSerializer(serializers.ModelSerializer):
     subject_name = serializers.CharField(source='subject.name', read_only=True)
