@@ -802,6 +802,9 @@ class ExportViewSet(viewsets.ViewSet):
             return Response({'error': 'No results found for this exam'}, status=status.HTTP_404_NOT_FOUND)
         
         # Convert to DataFrame
+        exam = Exam.objects.get(id=exam_id)
+        is_miq = exam.type == 'Müəllimlərin İşə Qəbulu'
+        
         data = []
         for result in results:
             detailed_result = DetailedStudentResultSerializer(result).data
@@ -809,39 +812,65 @@ class ExportViewSet(viewsets.ViewSet):
                 'Is nomresi': detailed_result['work_number'],
                 'Ad və Soyad': detailed_result['student_name'],
                 'Cins': 'Kişi' if detailed_result['gender'] == 'K' else 'Qadın',
-                'Əlaqə Nömrəsi': detailed_result['contact_number'],
                 'Filial': detailed_result['branch']['name'],
                 'İmtahan tarixi': detailed_result['exam']['date'],
                 'Bölmə': detailed_result['section_name'] if detailed_result['section_name'] else '',
-                'Sinif': result.class_level.name if result.class_level else '',
-                'İxtisas': detailed_result['specialization']['name'] if detailed_result['specialization']['name'] else '',
-                'Peşə': detailed_result['additional_datas']['peshe'] if detailed_result['additional_datas']['peshe'] else '',
                 'Variant': detailed_result['variant'],
-                'Məktəb Nömrəsi': "",
                 'Ümumi Bal': str(detailed_result['total_score']).replace('.',','),
                 'Düzgün Cavablar': detailed_result['overall_stats']['correct_answers'],
                 'Səhv Cavablar': detailed_result['overall_stats']['wrong_answers'],
                 'Boş Qalanlar': detailed_result['overall_stats']['empty_answers']
-                
-                
             }
+            
+            if is_miq:
+                spec = detailed_result.get('specialization')
+                add_data = detailed_result.get('additional_datas') or {}
+                student_data['İxtisas'] = spec.get('name', '') if spec else ''
+                student_data['Peşə'] = add_data.get('peshe', '') or ''
+            else:
+                student_data['Əlaqə Nömrəsi'] = detailed_result['contact_number']
+                if result.class_level:
+                    student_data['Sinif'] = result.class_level.name
+                if result.school_number:
+                    student_data['Məktəb Nömrəsi'] = result.school_number
+            
             if result.group:
                 student_data['Qrup'] = result.group.name
-            if result.class_level:
-                student_data['Sinif'] = result.class_level.name
-            if result.school_number:
-                student_data['Məktəb Nömrəsi'] = result.school_number
             for subject_result in SubjectResult.objects.filter(student_result=result):
                 student_data[subject_result.subject.name] = str(subject_result.score).replace('.',',')
             data.append(student_data)
-         
         
-        df = pd.DataFrame(data)
-        
-        # Create a CSV response
         response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         response['Content-Disposition'] = f'attachment; filename="exam_{exam_id}_results.xlsx"'
-        df.to_excel(excel_writer=response, index=False)
+        
+        if is_miq:
+            # Group data by specialization, each gets its own sheet
+            from collections import defaultdict
+            sheets = defaultdict(list)
+            no_spec_data = []
+            
+            for row in data:
+                spec_name = row.get('İxtisas', '').strip()
+                if spec_name:
+                    sheets[spec_name].append(row)
+                else:
+                    no_spec_data.append(row)
+            
+            with pd.ExcelWriter(response, engine='openpyxl') as writer:
+                if not sheets and no_spec_data:
+                    df = pd.DataFrame(no_spec_data)
+                    df.to_excel(writer, sheet_name='Nəticələr', index=False)
+                else:
+                    for spec_name, spec_data in sorted(sheets.items()):
+                        sheet_name = spec_name[:31]  # Excel sheet name max 31 chars
+                        df = pd.DataFrame(spec_data)
+                        df.to_excel(writer, sheet_name=sheet_name, index=False)
+                    if no_spec_data:
+                        df = pd.DataFrame(no_spec_data)
+                        df.to_excel(writer, sheet_name='Digər', index=False)
+        else:
+            df = pd.DataFrame(data)
+            df.to_excel(excel_writer=response, index=False)
 
         return response
     @action(detail=False, methods=['get'])
