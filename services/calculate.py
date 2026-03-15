@@ -1898,6 +1898,26 @@ class TxtImportService:
                 except Exception as e:
                     error_msg = f"Tələbə {student_result.work_number} - {student_result.student_name}: {str(e)}"
                     errors.append(error_msg)
+                    
+                    # Reset scores and clear subject results when recheck fails
+                    try:
+                        old_total_score = student_result.total_score
+                        student_result.total_score = None
+                        student_result.save()
+                        SubjectResult.objects.filter(student_result=student_result).delete()
+                        
+                        rechecked_results.append({
+                            'work_number': student_result.work_number,
+                            'student_name': student_result.student_name,
+                            'old_score': float(old_total_score) if old_total_score else 0,
+                            'new_score': 0,
+                            'score_difference': -(float(old_total_score) if old_total_score else 0),
+                            'error': str(e)
+                        })
+                        rechecked_count += 1
+                    except Exception as reset_error:
+                        errors.append(f"Tələbə {student_result.work_number}: Ballar sıfırlanarkən xəta - {str(reset_error)}")
+                    
                     continue
             
             # Create import log for recheck
