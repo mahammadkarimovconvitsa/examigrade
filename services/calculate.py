@@ -1125,20 +1125,17 @@ class TxtImportService:
         try:
             if self.exam.type == "Blok imtahanı" and 'group' in student_data and student_data['group']:
                 try:
-                    # First try to find section details for this specific group
                     section_details = self.exam.section_details.filter(
                         section__name__startswith=student_data['section'],
                         group__name=student_data['group']
                     ).first()
                     
-                    # If not found, try by group_name field
                     if not section_details:
                         section_details = self.exam.section_details.filter(
                             section__name__startswith=student_data['section'],
                             group_name=student_data['group']
                         ).first()
                     
-                    # If still not found, try without group filter (fallback)
                     if not section_details:
                         section_details = self.exam.section_details.filter(
                             section__name__startswith=student_data['section']
@@ -1147,9 +1144,23 @@ class TxtImportService:
                             print(f"WARNING: Using fallback section_details for group '{student_data['group']}'")
                 except Exception as block_section_error:
                     raise ValueError(f"Blok imtahanı bölmə detalları axtarılarkən xəta: {str(block_section_error)}")
+            elif self.exam.type == "Müəllimlərin İşə Qəbulu" and student_data.get('specialization_code'):
+                try:
+                    section_details = self.exam.section_details.filter(
+                        section__name__startswith=student_data['section'],
+                        specialization__code=student_data['specialization_code']
+                    ).first()
+                    
+                    if not section_details:
+                        section_details = self.exam.section_details.filter(
+                            section__name__startswith=student_data['section']
+                        ).first()
+                        if section_details:
+                            print(f"WARNING: Using fallback section_details for specialization '{student_data['specialization_code']}'")
+                except Exception as miq_section_error:
+                    raise ValueError(f"MİQ bölmə detalları axtarılarkən xəta: {str(miq_section_error)}")
             else:
                 try:
-                    # For non-block exams, use normal section filtering
                     section_details = self.exam.section_details.filter(
                         section__name__startswith=student_data['section']
                     ).first()
@@ -1841,8 +1852,21 @@ class TxtImportService:
                     # Update student result
                     old_total_score = student_result.total_score
                     student_result.total_score = total_score
+                    
+                    # Merge additional_data with existing additional_datas (preserve peshe etc.)
+                    merged_additional = {}
+                    if student_result.additional_datas and isinstance(student_result.additional_datas, dict):
+                        merged_additional.update(student_result.additional_datas)
                     if additional_data:
-                        student_result.additional_datas = additional_data
+                        if isinstance(additional_data, list):
+                            for item in additional_data:
+                                if isinstance(item, dict):
+                                    merged_additional.update(item)
+                        elif isinstance(additional_data, dict):
+                            merged_additional.update(additional_data)
+                    if merged_additional:
+                        student_result.additional_datas = merged_additional
+                    
                     student_result.save()
                     
                     # Delete existing subject results and create new ones
@@ -1975,6 +1999,12 @@ class TxtImportService:
         
         if student_result.group:
             student_data['group'] = student_result.group.name
+        
+        if student_result.specialization:
+            student_data['specialization_code'] = student_result.specialization.code
+        
+        if student_result.additional_datas:
+            student_data['additional_datas'] = student_result.additional_datas
         
         # Reconstruct foreign language information from existing subject results
         # This is crucial for proper foreign language filtering during recheck
