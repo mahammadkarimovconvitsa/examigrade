@@ -575,19 +575,19 @@ class TxtImportService:
             except Exception:
                 pass
 
-            specialization_code = parts[7].strip() if len(parts) > 7 else ''
-            peshe = parts[8].strip() if len(parts) > 8 else ''
+            specialization_code = parts[5].strip() if len(parts) > 5 else ''
+            peshe = parts[6].strip() if len(parts) > 6 else ''
 
             data = {
                 'student_name': f"{parts[0].strip()} {parts[1].strip()}",
-                'contact_number': parts[2].strip() if len(parts) > 2 else '',
-                'gender': parts[3].strip() if len(parts) > 3 else 'K',
-                'work_number': parts[4].strip() if len(parts) > 4 else '',
-                'section': parts[5].strip() if len(parts) > 5 else '',
-                'variant': parts[6].strip() if len(parts) > 6 else '',
+               
+              
+                'work_number': parts[2].strip() if len(parts) > 4 else '',
+                'section': parts[3].strip() if len(parts) > 5 else '',
+                'variant': parts[4].strip() if len(parts) > 6 else '',
                 'specialization_code': specialization_code,
-                'school_number': parts[9].strip() if len(parts) > 9 else '',
-                'answers': parts[10:] if len(parts) > 10 else [],
+               
+                'answers': parts[7:] if len(parts) > 7 else [],
                 'additional_datas': {'peshe': peshe},
             }
 
