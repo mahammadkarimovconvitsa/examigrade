@@ -689,17 +689,14 @@ class TxtImportService:
             # Check if work_number is empty or invalid
             if not student_data.get('work_number') or not re.match(r'^\d{0,9}$', student_data['work_number']):
                 # Only extract numeric digits from the work number if it exists
-                try:
-                    new_work_number = ''.join(c for c in student_data.get('work_number', '') if c.isdigit())
-                except Exception:
-                    new_work_number = ''
+                new_work_number = ''
                 
                 # If no digits were found or work_number was empty, generate a random 6-digit number
                 if not new_work_number:
                     try:
-                        new_work_number = ''.join(random.choices('0123456789', k=6))
+                        new_work_number = ''.join(random.choices('0123456789', k=7))
                     except Exception:
-                        new_work_number = '123456'  # Fallback work number
+                        new_work_number = '1234567'  # Fallback work number
                 
                 # Log the change
                 try:
